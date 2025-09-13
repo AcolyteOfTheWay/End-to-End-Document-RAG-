@@ -1,7 +1,3 @@
-Here’s a comprehensive README draft for **End-to-End-Document-RAG** based on examination of all files in the project. You can copy this into your README.md, edit as needed.
-
----
-
 # End-to-End Document RAG
 
 This project implements a full **Document Retrieval-Augmented Generation (RAG)** pipeline. Given a user’s query and a set of documents (PDFs, text, etc.), the system retrieves relevant contexts and then uses a generative model to produce a response grounded in those documents. It includes data ingestion, preprocessing, vector embeddings, retrieval, generation, user interface, and evaluation.
@@ -33,11 +29,11 @@ This project implements a full **Document Retrieval-Augmented Generation (RAG)**
 * Accepts PDFs (and potentially other document formats) as input.
 * Document parsing / text extraction.
 * Splitting documents into “chunks” / passages to facilitate retrieval.
-* Embedding generation for document chunks with a vector embedding model.
-* Vector store / similarity search over chunk embeddings.
-* Generative model for producing answers from retrieved contexts.
+* Embedding generation for document chunks with a HuggingFaceEmbedding vector embedding model.
+* Vector store / similarity search over chunk embeddings with FAISS.
+* LLM for producing answers from retrieved contexts.
 * A user-facing interface (Streamlit) to input queries and see responses.
-* Logging / configuration to allow easy adjustment of model, chunk size, etc.
+* Configuration to allow easy adjustment of model, chunk size, etc.
 
 ---
 
@@ -50,22 +46,21 @@ Here’s a breakdown of the major files and directories:
 │
 ├─ Data/                  
 │   ├─ raw/               ← Original documents (PDFs etc.)
-│   ├─ processed/         ← Extracted and cleaned text or chunked documents
-│   └─ embeddings/        ← Serialized embeddings / vector store data
+│   └─ urls/              ← raw urls
 │
 ├─ src/
-│   ├─ document_loader.py  ← Code to load, parse, and clean documents
-│   ├─ text_splitter.py    ← Logic for splitting long text into chunks
-│   ├─ embedding.py        ← Embedding model setup & running
-│   ├─ retriever.py        ← Code to query vector store & fetch relevant passages
-│   ├─ generator.py        ← Generative model wrapper for answer generation
-│   └─ utils.py            ← Helper functions (filesystem, preprocessing, etc.)
+│   ├─ document_ingestion.py  ← Code to load, parse, and clean documents
+│   ├─ graph_builder.py    ← Definition of StateGraph with LangGraph
+│   ├─ nodes.py        ← States the nodes for regular RAG and ReAct tools RAG
+│   ├─ state.py        ← Fetches current and/or updated RAG state
+│   ├─ vectorstore.py        ← FAISS vector stores and embeddings
+│   └─ config.py            ← API, model, hyperparameters
 │
 ├─ streamlit_app.py        ← Entry point for the Streamlit-based UI
 ├─ main.py                 ← Script for running pipeline end-to-end (preprocess, index, query etc.)
 ├─ requirements.txt        ← Python package dependencies
 ├─ config/                 ← Configuration files (settings, model choices, hyperparameters)
-├─ README.md               ← (To be replaced by this new, detailed README)
+├─ README.md               
 └─ .gitignore, etc.
 ```
 
@@ -73,7 +68,7 @@ Here’s a breakdown of the major files and directories:
 
 ## Installation
 
-These steps assume you have **Python 3.8+** installed.
+These steps assume you have **Python 3.12+** installed.
 
 1. Clone the repository
 
@@ -101,20 +96,18 @@ These steps assume you have **Python 3.8+** installed.
 
 ## Usage
 
-Below are typical workflow steps to get the system up and running.
+Below are typical workflow.
 
 ### Preprocessing Documents
 
-* Place raw documents (PDFs, text files) in `Data/raw/`.
-* Run document loading & cleaning script (this may extract text, remove noise, etc.).
-* The cleaned or extracted text is saved in `Data/processed/`.
+* Place raw documents (PDFs, text files) in `Data`.
 
 ### Indexing & Embeddings
 
-* Use the embedding model to convert document chunks to vector embeddings.
-* Store the embeddings along with metadata (document name, chunk ids etc.) in `Data/embeddings/` (or whichever directory is configured).
-* Build a vector store / index (could be FAISS, or another similarity search engine) for fast retrieval.
-
+* HuggingFaceEmbeddings create the embeddings and vectors.
+* The embeddings get stored
+* Vector store / index (FAISS)
+  
 ### Running the Streamlit App
 
 * Run the UI:
@@ -128,7 +121,7 @@ Below are typical workflow steps to get the system up and running.
 
 * The system retrieves top-k relevant chunks for the user’s query using the embedding + vector store.
 * These contexts are passed to a generative model (specified via config) which produces a response.
-* Options for the generative model (temperature, max tokens etc.) are adjustable in config or via command-line arguments.
+* Options for the generative model (temperature, max tokens etc.) are adjustable in config.
 
 ---
 
@@ -151,11 +144,11 @@ Configuration is done via files in `config/` directory and/or environment variab
 Some of the main Python packages used:
 
 * `streamlit` — for UI
-* Embedding library (e.g. `sentence-transformers` or similar)
-* Generative model library (e.g. `transformers`, OpenAI, etc.)
-* Vector store / similarity search tool (e.g. `faiss`, `annoy`, `hnswlib`)
-* PDF/text parsing tools (e.g. `pdfplumber`, `PyPDF2`, or other)
-* Utilities: `numpy`, `pandas`, etc.
+* Embedding library (e.g. `sentence-transformers` or `openai-embeddings`)
+* Model (e.g. `huggingface`, `openai`, `gemini` etc.)
+* Vector store / similarity search tool (e.g. `faiss`)
+* PDF/text parsing tools (`pypdf')
+* Tools: `Retriever`, `Wikipedia`.
 
 All required versions are listed in `requirements.txt`.
 
@@ -163,14 +156,14 @@ All required versions are listed in `requirements.txt`.
 
 ## Data
 
-* The directory `Data/raw/` contains the original documents to be used.
-* After processing, document texts (cleaned) are stored in `Data/processed/`.
-* Embeddings + vector store data are stored in `Data/embeddings/`.
+* The directory `Data/` contains the original documents to be used.
+* Document ingestion and processing is done by `document_ingestion`.
+* Embeddings + vector store data are stored in `vectorstore`.
 
 If you want to use your own documents, follow the same folder conventions:
 
-1. Put raw documents into `Data/raw/`.
-2. Run preprocessing + embedding pipeline to populate `processed/` and `embeddings/`.
+1. Put raw documents into `Data/`.
+2. Run preprocessing + embedding pipeline to populate `vectorstore` then build `graph_builder` which uses `nodes`.
 
 ---
 
@@ -189,21 +182,13 @@ Here’s the high-level flow of what the system does:
 7. **UI + Interaction**: Through Streamlit app, let user ask queries and display both the answer and sources.
 
 ---
+## Improvements (Most Relevant)
 
-## Limitations & Possible Improvements
+1. Hybrid retrieval: combine semantic embeddings + keyword search, Web search.
+2. Query reformulation / expansion for better recall
+3. Better ranking / re-ranking of retrieved chunks to reduce noise
+4. Source attribution & more robust verification to reduce hallucinations
+5. Support for multimodal content (images, tables, diagrams)
 
-* **Accuracy / Hallucination**: Generated answers can still include incorrect or unsupported statements if retrieved contexts are insufficient.
-* **Latency**: Embedding & retrieval can be slow for large document sets. Improvements: use more efficient vector databases, pre-cache embeddings, batch embedding.
-* **Scaling**: For very large corpora, your vector store & memory usage may become bottlenecks.
-* **Document Types**: Might be limited to PDFs and plain text; other formats (images, scanned docs) need OCR or extra preprocessing.
-* **Evaluation**: Currently may lack automated evaluation metrics or ground truth to quantitatively measure performance.
 
----
 
-## License
-
-Specify the license under which this code is released (e.g. MIT, Apache 2.0, etc.). If none is present, you should add a LICENSE file.
-
----
-
-If you like, I can send you a version with badges (build status, contributions, etc.), or tailor some sections to your specific environment (GPU setup, cloud storage, etc.).
