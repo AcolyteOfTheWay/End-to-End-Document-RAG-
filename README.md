@@ -182,13 +182,14 @@ Here’s the high-level flow of what the system does:
 7. **UI + Interaction**: Through Streamlit app, let user ask queries and display both the answer and sources.
 
 ---
-## Improvements (Most Relevant)
+### Improvements that can be made
 
 1. Hybrid retrieval: combine semantic embeddings + keyword search, Web search.
 2. Query reformulation / expansion for better recall
 3. Better ranking / re-ranking of retrieved chunks to reduce noise
 4. Source attribution & more robust verification to reduce hallucinations
 5. Support for multimodal content (images, tables, diagrams)
+
 
 
 
